@@ -38,23 +38,13 @@ app.get('/functions/espPing', (req, res) => {
 // ── espPoll ───────────────────────────────────────────────────────────────────
 app.post('/functions/espPoll', async (req, res) => {
   const {
-    device_id,
-    ip,
-    firmware_version,
-    current_position,
-    is_moving,
-    battery_voltage,
-    battery_pct,
-    usb_powered,
-    poll_interval_ms
+    device_id, ip, firmware_version, current_position,
+    is_moving, battery_voltage, battery_pct, usb_powered, poll_interval_ms
   } = req.body;
 
-  if (!device_id) {
-    return res.status(400).json({ error: 'device_id required' });
-  }
+  if (!device_id) return res.status(400).json({ error: 'device_id required' });
 
   try {
-    // Upsert device state
     const result = await pool.query(`
       INSERT INTO devices (
         device_id, ip, firmware_version, current_position,
@@ -72,18 +62,65 @@ app.post('/functions/espPoll', async (req, res) => {
         poll_interval_ms = EXCLUDED.poll_interval_ms,
         last_seen        = NOW()
       RETURNING target_position
-    `, [
-      device_id, ip, firmware_version, current_position,
-      is_moving, battery_voltage, battery_pct, usb_powered,
-      poll_interval_ms
-    ]);
+    `, [device_id, ip, firmware_version, current_position,
+        is_moving, battery_voltage, battery_pct, usb_powered, poll_interval_ms]);
 
-    const target = result.rows[0].target_position;
-
-    res.json({ target_position: target });
-
+    res.json({ target_position: result.rows[0].target_position });
   } catch (err) {
     console.error('[Poll] DB error:', err.message);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// ── Get all devices — for base44 app ─────────────────────────────────────────
+app.get('/functions/getDevices', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM devices ORDER BY last_seen DESC'
+    );
+    res.json({ devices: result.rows });
+  } catch (err) {
+    console.error('[getDevices] DB error:', err.message);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// ── Get single device — for base44 app ───────────────────────────────────────
+app.get('/functions/getDevice/:device_id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM devices WHERE device_id = $1',
+      [req.params.device_id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: 'device not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[getDevice] DB error:', err.message);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// ── Set target position — called by base44 app ────────────────────────────────
+app.post('/functions/setTarget', async (req, res) => {
+  const { device_id, target_position } = req.body;
+
+  if (!device_id || target_position === undefined)
+    return res.status(400).json({ error: 'device_id and target_position required' });
+
+  if (target_position < 0 || target_position > 180)
+    return res.status(400).json({ error: 'target_position must be 0-180' });
+
+  try {
+    const result = await pool.query(
+      `UPDATE devices SET target_position = $1 WHERE device_id = $2 RETURNING *`,
+      [target_position, device_id]
+    );
+    if (result.rows.length === 0)
+      return res.status(404).json({ error: 'device not found' });
+    res.json({ ok: true, device: result.rows[0] });
+  } catch (err) {
+    console.error('[setTarget] DB error:', err.message);
     res.status(500).json({ error: 'database error' });
   }
 });
