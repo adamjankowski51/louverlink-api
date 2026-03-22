@@ -284,6 +284,33 @@ app.post('/functions/setOta', async (req, res) => {
 });
 
 // ── Health check ──────────────────────────────────────────────────────────────
+// ── One-time migration endpoint — delete after running once ───────────────────
+app.get('/functions/migrate', async (req, res) => {
+  try {
+    await pool.query(`
+      ALTER TABLE devices
+        ADD COLUMN IF NOT EXISTS target_position_pct  INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS current_position_pct INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS target_state         TEXT DEFAULT 'closed',
+        ADD COLUMN IF NOT EXISTS is_online            BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS servo_angle_min      INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS servo_angle_max      INTEGER DEFAULT 180,
+        ADD COLUMN IF NOT EXISTS gpio_pin             INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS ota_version          TEXT,
+        ADD COLUMN IF NOT EXISTS ota_url              TEXT,
+        ADD COLUMN IF NOT EXISTS claimed              BOOLEAN DEFAULT false,
+        ADD COLUMN IF NOT EXISTS name                 TEXT
+    `);
+    res.json({ ok: true, message: 'Migration complete' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+```
+
+Commit that, wait for Render to redeploy, then open this URL in your browser:
+```
+https://api.scshutters.com/functions/migrate
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', ts: Date.now() });
 });
