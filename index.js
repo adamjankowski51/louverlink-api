@@ -283,7 +283,6 @@ app.post('/functions/setOta', async (req, res) => {
   }
 });
 
-// ── Health check ──────────────────────────────────────────────────────────────
 // ── One-time migration endpoint — delete after running once ───────────────────
 app.get('/functions/migrate', async (req, res) => {
   try {
@@ -306,10 +305,8 @@ app.get('/functions/migrate', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-```
 
-Commit that, wait for Render to redeploy, then open this URL in your browser:
-```
+// ── Health check ──────────────────────────────────────────────────────────────
 https://api.scshutters.com/functions/migrate
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', ts: Date.now() });
