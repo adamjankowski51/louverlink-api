@@ -283,8 +283,30 @@ app.post('/functions/setOta', async (req, res) => {
   }
 });
 
+// ── Unclaim device — called by app delete or device factory reset ─────────────
+app.post('/functions/unclaimDevice', async (req, res) => {
+  const { device_id } = req.body;
+  if (!device_id) return res.status(400).json({ error: 'device_id required' });
+  try {
+    await pool.query(
+      `UPDATE devices SET
+        claimed          = false,
+        name             = NULL,
+        target_position  = 0,
+        target_position_pct = 0,
+        servo_angle_min  = 0,
+        servo_angle_max  = 180
+       WHERE device_id = $1`,
+      [device_id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[unclaimDevice] error:', err.message);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
 // ── Health check ──────────────────────────────────────────────────────────────
-https://api.scshutters.com/functions/migrate
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', ts: Date.now() });
 });
